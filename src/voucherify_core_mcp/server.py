@@ -108,7 +108,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 
 ### Qualification & Deal Tools:
 - `qualifications`: Find applicable vouchers/promotions for a customer
-- `get_best_deals`: Get top 5 promotions with best deals (do NOT combine with qualifications)
+- `get_best_deals(customer, order)`: Get top 5 promotions with best deals (do NOT combine with qualifications)
 
 ### Product Tools:
 - `list_products`: Search products with complex filtering
@@ -132,7 +132,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 ### Customer Analysis:
 1. Find customer with `find_customer` (by email or ID)
 2. For voucher wallet → use `qualifications` with customer + scenario="CUSTOMER_WALLET" (⚠️ customer is ALWAYS required)
-3. For best deals analysis → use `get_best_deals` with customer + order
+3. For best deals analysis → use `get_best_deals(customer, order)` with customer + order (⚠️ customer and order are ALWAYS required)
 
 ### Product Search:
 - Use `list_products` with structured filters
@@ -1028,9 +1028,10 @@ async def get_best_deals(
     JSON array of up to 5 promotion objects, each containing:
     - id: Promotion identifier
     - result: Qualification status (APPLICABLE, PARTIALLY_APPLICABLE, etc.)
+    - is_applicable: Boolean indicating if given incentive meets all validation rules
     - redeemable_details: Promotion information (banner, description, campaign)
     - validation_rules: Array of validation requirements with status
-    - resolved_order: Order with calculated totals and promotion effects
+    - resolved_order: Order with calculated totals and promotion effects if incentive is applicable
     
     Each validation rule includes:
     - validation_rules_definition: Rule logic and requirements
@@ -1066,6 +1067,32 @@ async def get_best_deals(
         if qualifications["redeemables"]["total"] == 0:
             return json.dumps([], indent=2)
         else:
+            applicable_redeemables_map = {}
+
+            requested_redeemables = []
+            for qualified_item in qualifications["redeemables"]["data"]:
+                redeemable_type = qualified_item.get("object")
+                if redeemable_type in ("promotion_tier", "voucher", "promotion_stack"):
+                    requested_redeemables.append({"object": redeemable_type, "id": qualified_item.get("id")})
+
+            if requested_redeemables:
+                validations_payload = {
+                    "customer": payload.get("customer", {}),
+                    "order": order,
+                    "redeemables": requested_redeemables,
+                }
+                validations_resp = await async_make_voucherify_request(
+                    "POST", "/v1/validations", json_data=validations_payload, ctx=ctx
+                )
+                validations_data = validations_resp.json()
+
+                for item in (validations_data.get("redeemables") or []):
+                    if item.get("status") == "APPLICABLE":
+                        applicable_redeemables_map[item.get("id")] = {
+                            "status": item.get("status"),
+                            "order": item.get("order"),
+                        }
+
             redeemables = []
             for redeemable in qualifications["redeemables"]["data"]:
                 validation_rules = []
@@ -1085,18 +1112,21 @@ async def get_best_deals(
                             "validation_omitted_sub_rules": rule["validation_omitted_rules"],
                         })
 
+                redeemable_id = redeemable.get("id")
+                is_applicable = applicable_redeemables_map.get(redeemable_id) is not None
+
                 redeemables.append({
-                    "id": redeemable["id"],
+                    "id": redeemable_id,
                     "object": redeemable["object"],
                     "result": redeemable["result"],
+                    "is_applicable": is_applicable,
                     "redeemable_details": {
                         "public_banner": redeemable["banner"] if "banner" in redeemable else None,
                         "alternative_description": redeemable["name"] if "name" in redeemable else None,
                         "campaign_name": redeemable["campaign_name"] if "campaign_name" in redeemable else None,
                     },
-                    "resolved_order": redeemable["order"],
-                    # "full_redeemable": redeemable,
-                    "validation_rules": validation_rules
+                    "validation_rules": validation_rules,
+                    "resolved_order": applicable_redeemables_map.get(redeemable_id).get("order") if is_applicable else None,
                 })
             return json.dumps(redeemables, indent=2)
     except Exception as e:
