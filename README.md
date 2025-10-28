@@ -1,18 +1,18 @@
 ## Voucherify Core MCP
 
-Use a MCP (Model Context Protocol) server to ask questions in plain language and explore your loyalty and promo data through Voucherify API endpoints. An MCP works likea teammate to pull the numbers for you.
+Use a MCP (Model Context Protocol) server to ask questions in plain language and explore your loyalty and promo data through Voucherify API endpoints. An MCP works like a teammate to pull the numbers for you.
 
 [Read complete Voucherify Core MCP article](https://docs.voucherify.io/guides/voucherify-core-mcp)
 
 ## Pick your path
 
 Set up MPC connection in two ways:
-- **Use the published package (recommended)**: no local build; your agent just spawns the server
+- **Use the published package (recommended)**: no local build; your agent spawns the server
 - **Contribute or run from source**: set up the repo, run locally (HTTP or `stdio`), and hack away 🚀
 
 ### Use the published package (recommended)
 
-No local setup needed — your agent runs the server with `uvx`.
+You don't need a local setup. Your agent runs the server with `uvx`.
 
 #### Package prerequisites
 
@@ -58,7 +58,7 @@ To set up Voucherify Core MCP:
 
 If you want to explore the code, tweak things, or run a local HTTP server, follow this setup.
 
-#### Contribute: prerequisites
+#### Contribute: Prerequisites
 
 - **Python 3.12+**
 - **Voucherify credentials**: `VOUCHERIFY_APP_ID`, `VOUCHERIFY_APP_TOKEN` (use a separate pair)
@@ -179,7 +179,9 @@ You can access the following endpoints with the Voucherify MCP to fetch data:
 - *Get_promotion_tier*: Fetches details about the configuration of a promotion tier, such as reward levels or thresholds that determine customer benefits.
 - *Qualifications*: Checks and returns a customer's eligibility for specific campaigns, promotions, or reward rules, ensuring only qualified users receive incentives.
 - *Get_best_deals*: Returns information about better prices contextually by showing the top 5 best incentives.
-> For the best results, set the Application rule to **Partial** in Voucherify dashboard, Redemptions section, Stacking rules tab. Read the [Stacking rules](https://support.voucherify.io/article/604-stacking-rules) article for more details.
+
+  > For the best results, set the Application rule to **Partial** in Voucherify dashboard, Redemptions section, Stacking rules tab. Read the [Stacking rules](https://support.voucherify.io/article/604-stacking-rules) article for more details.
+
 - *List_products*: Retrieves the catalog of products, including attributes like pricing, availability, and categories.
 - *Get_voucher*: Returns full details of a specific voucher, such as code, status, balance, and expiration date, to support redemption or troubleshooting.
 
