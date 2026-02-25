@@ -106,6 +106,9 @@ This server provides read-only MCP tools for retrieving information from Voucher
 - `get_voucher`: Get specific voucher details by code or ID
 - `get_promotion_tier`: Get specific promotion tier details
 
+### Loyalty Points Tools:
+- `estimate_loyalty_points`: Estimate how many points a customer will earn for an order (by loyalty card code or campaign ID)
+
 ### Qualification & Deal Tools:
 - `qualifications`: Find applicable vouchers/promotions for a customer
 - `get_best_deals(customer, order)`: Get top 5 promotions with best deals (do NOT combine with qualifications)
@@ -133,6 +136,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 1. Find customer with `find_customer` (by email or ID)
 2. For voucher wallet → use `qualifications` with customer + scenario="CUSTOMER_WALLET" (⚠️ customer is ALWAYS required)
 3. For best deals analysis → use `get_best_deals(customer, order)` with customer + order (⚠️ customer and order are ALWAYS required)
+4. For loyalty points estimation → use `estimate_loyalty_points` with loyalty_card (preferred) or campaign_id + customer + order (⚠️ customer and order are ALWAYS required)
 
 ### Product Search:
 - Use `list_products` with structured filters
@@ -1131,6 +1135,190 @@ async def get_best_deals(
             return json.dumps(redeemables, indent=2)
     except Exception as e:
         raise map_voucherify_error_to_tool_error(e, "calling get_best_deals", ctx)
+
+
+@mcp.tool(
+    name="estimate_loyalty_points",
+    tags={"loyalties", "points", "estimation"},
+)
+async def estimate_loyalty_points(
+    ctx: Context,
+    customer: Annotated[
+        Dict[str, Any],
+        {
+            "description": "REQUIRED. Customer object. Must contain either 'id' (cust_ prefixed) or 'source_id'. Optional 'metadata' dict. Always provide this even when loyalty_card is given."
+        },
+    ],
+    order: Annotated[
+        Dict[str, Any],
+        {
+            "description": "REQUIRED. Order object. Must contain 'source_id' (existing order ID) or 'amount' (total in cents). Optional 'metadata' dict. Always provide this even when loyalty_card is given."
+        },
+    ],
+    loyalty_card: Annotated[
+        Optional[str],
+        {
+            "description": "Loyalty card code (e.g., 'Loyalty-ZC4Vg') or voucher ID with 'v_' prefix. "
+            "Resolves the campaign ID only — customer and order must still be provided separately."
+        },
+    ] = None,
+    campaign_id: Annotated[
+        Optional[str],
+        {
+            "description": "Loyalty campaign ID with 'camp_' prefix (e.g., 'camp_XXXXXXXXX'). "
+            "Use when the campaign ID is already known. Can be combined with loyalty_card for validation."
+        },
+    ] = None,
+) -> str:
+    """
+    Estimate how many loyalty points a customer will earn for a given order.
+
+    CRITICAL: customer and order are ALWAYS required, even when loyalty_card is provided.
+    The loyalty_card only identifies the campaign — it does NOT replace customer or order.
+
+    Calculates the estimated number of points a customer will receive in a
+    loyalty campaign based on the campaign's earning rules and the provided order.
+
+    Important Limitations:
+    - Returns an estimation, not a precise point value
+    - Works only for "Order paid" earning rules
+    - For campaigns with tiers, mappings, and multiple earning rules, the actual
+      points may differ as the customer may change tiers during final calculation
+
+    Use Case: Show loyalty point banners in checkout flows
+    - Display estimated points before order placement
+    - Motivate customers by showing point rewards for their current cart
+    - Combine with get_best_deals for comprehensive loyalty estimations
+
+    Campaign Identification (at least one required):
+    - loyalty_card: Loyalty card code or voucher ID — resolves the campaign ID only.
+    - campaign_id: Direct loyalty campaign ID — use when already known.
+    - Both can be provided: the tool verifies the loyalty card belongs to the given campaign.
+
+    Parameters:
+    - customer: REQUIRED - Customer identification (id or source_id required). Always provide.
+    - order: REQUIRED - Order details with source_id for existing orders or amount for estimation. Always provide.
+    - loyalty_card: Loyalty card code or voucher ID (at least one of loyalty_card/campaign_id required)
+    - campaign_id: Loyalty campaign ID with 'camp_' prefix (at least one of loyalty_card/campaign_id required)
+
+    Customer Object Structure:
+    Required (one of):
+    - id: Customer ID with 'cust_' prefix (e.g., "cust_abc123")
+    - source_id: External customer identifier
+    Optional:
+    - metadata: Dict of custom customer attributes
+
+    Order Object Structure:
+    Required (one of):
+    - source_id: Existing order ID assigned by Voucherify (e.g., "ord_34567890")
+    - amount: Total order amount in cents (e.g., 5000 for $50.00)
+    Optional:
+    - metadata: Dict of custom order attributes
+
+    Pricing Rules:
+    - All amounts in cents (5000 = $50.00, 150 = $1.50)
+
+    Examples:
+    - estimate_loyalty_points(
+        loyalty_card="Loyalty-ZC4Vg",
+        customer={"source_id": "customer123"},
+        order={"amount": 5000}
+      )
+    - estimate_loyalty_points(
+        campaign_id="camp_XXXXXXXXX",
+        customer={"id": "cust_abc123"},
+        order={"source_id": "ord_34567890"}
+      )
+    - estimate_loyalty_points(
+        loyalty_card="Loyalty-ZC4Vg",
+        campaign_id="camp_XXXXXXXXX",
+        customer={"source_id": "customer123"},
+        order={"amount": 8000, "metadata": {"source": "checkout"}}
+      )
+
+    Returns:
+    JSON object containing:
+    - campaign: Campaign details (id, name, object)
+    - points_estimation: Estimated number of points the customer will earn
+
+    Example Response:
+    {
+        "campaign": {
+            "id": "camp_XXXXXXXXX",
+            "name": "Loyalty-campaign",
+            "object": "campaign"
+        },
+        "points_estimation": 51
+    }
+
+    Error Cases:
+    - 400: Campaign doesn't allow auto-join for non-members, inactive campaign,
+      inactive loyalty card, or missing customer/order objects
+    - 404: Campaign ID or loyalty card not found
+
+    Raises:
+    - ToolError: If parameters invalid, campaign not found, or customer not eligible
+    """
+    try:
+        if not loyalty_card and not campaign_id:
+            raise ToolError(
+                "Provide either 'loyalty_card' or 'campaign_id' (or both)."
+            )
+
+        cust_payload: Dict[str, Any] = {}
+        for k in ["id", "source_id", "metadata"]:
+            if k in customer and customer[k] is not None:
+                cust_payload[k] = customer[k]
+        if not ("id" in cust_payload or "source_id" in cust_payload):
+            raise ToolError(
+                "Customer object must include at least 'id' or 'source_id'."
+            )
+
+        order_payload: Dict[str, Any] = {}
+        for k in ["source_id", "amount", "metadata"]:
+            if k in order and order[k] is not None:
+                order_payload[k] = order[k]
+        if not ("source_id" in order_payload or "amount" in order_payload):
+            raise ToolError(
+                "Order object must include at least 'source_id' or 'amount'."
+            )
+
+        if loyalty_card:
+            voucher_response = await async_make_voucherify_request(
+                "GET", f"/v1/vouchers/{loyalty_card}", ctx=ctx
+            )
+            voucher = voucher_response.json()
+            if voucher.get("type") != "LOYALTY_CARD":
+                raise ToolError(
+                    f"Voucher '{loyalty_card}' is not a loyalty card (type: {voucher.get('type')})."
+                )
+            resolved_campaign_id = voucher["campaign_id"]
+            if campaign_id and campaign_id != resolved_campaign_id:
+                raise ToolError(
+                    f"Loyalty card '{loyalty_card}' belongs to campaign '{resolved_campaign_id}', "
+                    f"not '{campaign_id}'."
+                )
+            campaign_id = resolved_campaign_id
+
+        payload: Dict[str, Any] = {
+            "customer": cust_payload,
+            "order": order_payload,
+        }
+
+        response = await async_make_voucherify_request(
+            "POST",
+            f"/v1/loyalties/{campaign_id}/qualifications",
+            json_data=payload,
+            ctx=ctx,
+        )
+
+        return json.dumps(response.json(), indent=2)
+
+    except Exception as e:
+        raise map_voucherify_error_to_tool_error(
+            e, "estimating loyalty points", ctx, loyalty_card or campaign_id
+        )
+
 
 # =====================================================================
 # Pagination helpers and listing tools (customers, voucher tx, campaign tx)
