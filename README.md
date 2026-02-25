@@ -182,6 +182,7 @@ You can access the following endpoints with the Voucherify MCP to fetch data:
 
   > For the best results, set the Application rule to **Partial** in Voucherify dashboard, Redemptions section, Stacking rules tab. Read the [Stacking rules](https://support.voucherify.io/article/604-stacking-rules) article for more details.
 
+- *Estimate_loyalty_points*: Returns an estimation of how many points a customer will earn for an order
 - *List_products*: Retrieves the catalog of products, including attributes like pricing, availability, and categories.
 - *Get_voucher*: Returns full details of a specific voucher, such as code, status, balance, and expiration date, to support redemption or troubleshooting.
 
