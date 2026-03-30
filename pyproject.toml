@@ -39,7 +39,7 @@ dependencies = [
 dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.23.8",
-    "litellm>=1.74.3",
+    "litellm>=1.74.3,<=1.82.6",
     "mcp[cli]>=1.11.0",
     "voucherify>=5.0.3",
 ]
