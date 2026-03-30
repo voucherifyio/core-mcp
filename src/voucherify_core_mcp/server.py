@@ -1108,12 +1108,12 @@ async def get_best_deals(
                         validation_rules.append({
                             # Don't send name to avoid confusion with incentive name
                             "validation_rules_definition": {
-                                "rules": val_rule["rules"],
-                                "bundle_rules": val_rule["bundle_rules"],
-                                "applicable_to": val_rule["applicable_to"]
+                                "rules": val_rule.get("rules"),
+                                "bundle_rules": val_rule.get("bundle_rules"),
+                                "applicable_to": val_rule.get("applicable_to")
                             },
-                            "validation_status": rule["validation_status"],
-                            "validation_omitted_sub_rules": rule["validation_omitted_rules"],
+                            "validation_status": rule.get("validation_status"),
+                            "validation_omitted_sub_rules": rule.get("validation_omitted_rules"),
                         })
 
                 redeemable_id = redeemable.get("id")
