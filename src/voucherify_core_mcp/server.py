@@ -105,6 +105,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 - `list_campaigns`: Get all campaigns for name-based lookup
 - `get_campaign_summary`: Retrieve campaign analytics and statistics  
 - `get_voucher`: Get specific voucher details by code or ID
+- `list_voucher_redemptions`: List all redemptions for a voucher code (find referees who redeemed a referral code)
 - `get_promotion_tier`: Get specific promotion tier details
 
 ### Loyalty Points Tools:
@@ -937,6 +938,77 @@ async def get_promotion_tier(
 
     except Exception as e:
         raise map_voucherify_error_to_tool_error(e, "retrieving promotion tier", ctx, promotion_tier_id)
+
+
+# ----------------------- Voucher Redemptions --------------------------
+
+@mcp.tool(
+    name="list_voucher_redemptions",
+    tags={"vouchers", "redemptions", "read"}
+)
+async def list_voucher_redemptions(
+    ctx: Context,
+    code: Annotated[
+        str,
+        {"description": "Voucher code to list redemptions for (e.g., 'Taxfix-RS-7pWtOYhY', 'WELCOME10')"}
+    ],
+    page: Annotated[
+        Optional[int],
+        {"description": "Page number for pagination (omit for page 1, provide 2+ for subsequent pages)"}
+    ] = None,
+) -> str:
+    """
+    List all redemptions for a specific voucher code.
+
+    Returns paginated redemption history for a voucher, including which customers
+    redeemed it. Useful for referral programs to find all referees who used a
+    referrer's referral code.
+
+    Parameters:
+    - code: Voucher code to look up redemptions for
+    - page: Optional page number (default: 1, provide only for page 2+)
+
+    Common Use Cases:
+    - Find all referees who redeemed a referral code:
+      list_voucher_redemptions(code="Taxfix-RS-7pWtOYhY")
+    - Check redemption history for a discount voucher:
+      list_voucher_redemptions(code="WELCOME10")
+
+    Returns:
+    JSON object containing:
+    - redemptions: Array of redemption objects, each including:
+      - id: Redemption ID
+      - customer_id: ID of the customer who redeemed
+      - customer: Customer object with id, source_id, email, metadata
+      - date: Redemption timestamp
+      - result: Redemption outcome (SUCCESS, FAILURE)
+      - voucher: Voucher details at time of redemption
+    - total: Total number of redemptions
+    - has_more: Boolean indicating if more pages available
+
+    Pagination:
+    - Results per page controlled by API defaults
+    - Use page parameter for subsequent pages
+
+    Raises:
+    - ToolError: If voucher code not found or invalid
+    """
+    try:
+        if not code or not code.strip():
+            raise ToolError("Voucher 'code' is required.")
+
+        encoded_code = quote(code, safe="")
+        params: Dict[str, Any] = {"limit": 100}
+        if page and page > 1:
+            params["page"] = page
+
+        ctx.info(f"Listing redemptions for voucher: {code}")
+        response = await async_make_voucherify_request(
+            "GET", f"/v1/vouchers/{encoded_code}/redemptions", params=params, ctx=ctx
+        )
+        return json.dumps(response.json(), indent=2)
+    except Exception as e:
+        raise map_voucherify_error_to_tool_error(e, "listing voucher redemptions", ctx, code)
 
 
 # ----------------------- Qualifications ------------------------------
