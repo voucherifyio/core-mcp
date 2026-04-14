@@ -126,6 +126,8 @@ def main() -> None:
         {"source_id": "test2@voucherify.io", "email": "test2+foobar@voucherify.io", "metadata": {"club": "VIP-Warsaw"}},
         {"source_id": "test-3", "email": "test3@voucherify.io", "metadata": {"club": "VIP-Warsaw"}},
         {"source_id": "test-4", "email": "test4@voucherify.io", "metadata": {"foo": "baz"}},
+        {"source_id": "test-5", "email": "test5@voucherify.io", "metadata": {"referrerUserId": "test-1", "referralCampaignName": "TestReferralCampaign"}},
+        {"source_id": "test-6", "email": "test6@voucherify.io", "metadata": {"referrerUserId": "test-1", "referralCampaignName": "TestReferralCampaign"}},
     ]
 
     created_customers: Dict[str, CustomersCreateResponseBody] = {}
@@ -138,6 +140,8 @@ def main() -> None:
         "VF_CUSTOMER_ID_2": created_customers["test2@voucherify.io"].id,
         "VF_CUSTOMER_ID_3": created_customers["test-3"].id,
         "VF_CUSTOMER_ID_4": created_customers["test-4"].id,
+        "VF_CUSTOMER_ID_5": created_customers["test-5"].id,
+        "VF_CUSTOMER_ID_6": created_customers["test-6"].id,
     })
 
     # 3.1) Create segments: VIPs and non-VIPs based on metadata.club
