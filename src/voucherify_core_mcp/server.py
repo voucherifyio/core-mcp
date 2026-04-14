@@ -98,6 +98,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 
 ### Customer Tools:
 - `find_customer`: Look up customer by email or ID (cust_ prefix)
+- `list_customers`: Search customers with metadata filters and pagination (e.g., find referees by metadata.referrerUserId)
 
 ### Campaign & Promotion Tools:
 - `get_campaign`: Retrieve complete campaign details by ID with validation rules
@@ -345,6 +346,99 @@ async def find_customer(
         # return json.dumps(full_resp.json(), indent=2)
     except Exception as e:
         raise map_voucherify_error_to_tool_error(e, "finding customer", ctx)
+
+
+@mcp.tool(
+    name="list_customers",
+    tags={"customers", "read"}
+)
+async def list_customers(
+    ctx: Context,
+    filters: Annotated[
+        Optional[Dict],
+        {"description": "Customer filters using field paths and condition operators. Must be valid JSON object with nested structure."}
+    ] = None,
+    page: Annotated[
+        Optional[int],
+        {"description": "Page number for pagination (omit for page 1, provide 2+ for subsequent pages)"}
+    ] = None,
+) -> str:
+    """
+    List customers with optional filtering and pagination.
+
+    Returns paginated customer list with flexible filtering capabilities for
+    customer discovery, segmentation analysis, and referral investigation.
+
+    Parameters:
+    - filters: Optional filter criteria using field paths and operators
+    - page: Optional page number (default: 1, provide only for page 2+)
+
+    Filter Structure:
+    {
+        "field_path": {
+            "conditions": {
+                "$operator": "value"
+            }
+        }
+    }
+
+    Supported Fields:
+    - name: Customer name (string)
+    - email: Customer email address (string)
+    - source_id: External customer identifier (string)
+    - created_at: Creation date (ISO 8601)
+    - metadata.<field>: Custom metadata fields (various types)
+
+    Operators by Field Type:
+    String fields (name, email, source_id, metadata):
+    - $is, $is_not: Exact match
+    - $contains, $starts_with: Partial match
+    - $in: Match any from array
+
+    Numeric fields (numeric metadata):
+    - $more_than, $less_than: Comparison
+    - $more_than_equal, $less_than_equal: Inclusive comparison
+
+    Date fields (created_at):
+    - $after, $before: Date comparison (ISO 8601 format)
+
+    Common Use Cases:
+    - Find all referees of a referrer:
+      list_customers(filters={"metadata.referrerUserId": {"conditions": {"$is": "789781"}}})
+    - Find referees for a specific campaign:
+      list_customers(filters={
+          "metadata.referrerUserId": {"conditions": {"$is": "789781"}},
+          "metadata.referralCampaignName": {"conditions": {"$is": "ReferralProgram"}}
+      })
+    - Find customers by name:
+      list_customers(filters={"name": {"conditions": {"$contains": "John"}}})
+
+    Returns:
+    JSON object containing:
+    - customers: Array of customer objects with full details
+    - total: Total number of matching customers
+    - has_more: Boolean indicating if more pages available
+    - Each customer includes: id, source_id, email, name, metadata, timestamps
+
+    Pagination:
+    - 100 customers per page
+    - Results sorted by created_at descending (newest first)
+
+    Raises:
+    - ToolError: If filter structure invalid or unsupported operators used
+    """
+    try:
+        params = dict_to_querystring({
+            "page": page or 1,
+            "limit": 100,
+            "order": "-created_at",
+            "filters": filters or None,
+        })
+        response = await async_make_voucherify_request("GET", "/v1/customers", params=params, ctx=ctx)
+        return json.dumps(response.json(), indent=2)
+    except Exception as e:
+        raise map_voucherify_error_to_tool_error(e, "listing customers", ctx)
+
 
 # ----------------------- Campaigns ------------------------------
 
