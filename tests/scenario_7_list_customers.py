@@ -24,8 +24,8 @@ async def fake_agent():
 
 
 @pytest.mark.asyncio
-async def test_list_customers_by_metadata_referrer(fake_agent: FakeAgent):
-    job_goal = "Find all customers whose metadata 'referrerUserId' equals 'test-1'. Return their ids and emails."
+async def test_list_customers_by_single_metadata_filter(fake_agent: FakeAgent):
+    job_goal = "Find all customers whose metadata 'club' equals 'VIP-Warsaw'. Return their ids and emails."
     jobContext = await fake_agent.startJob(job_goal)
 
     assert_tool_call(
@@ -33,7 +33,7 @@ async def test_list_customers_by_metadata_referrer(fake_agent: FakeAgent):
         expectedToolName = "list_customers",
         expectedToolArgs = {
             "filters": {
-                "metadata.referrerUserId": { "conditions": { "$is": "test-1" } }
+                "metadata.club": { "conditions": { "$is": "VIP-Warsaw" } }
             }
         }
     )
@@ -42,19 +42,19 @@ async def test_list_customers_by_metadata_referrer(fake_agent: FakeAgent):
     assert_message(
         jobContext,
         expectedPatterns = [
-            os.environ.get("VF_CUSTOMER_ID_5"),
-            os.environ.get("VF_CUSTOMER_ID_6"),
+            os.environ.get("VF_CUSTOMER_ID_2"),
+            os.environ.get("VF_CUSTOMER_ID_3"),
         ],
         disallowedPatterns = [
             os.environ.get("VF_CUSTOMER_ID_1"),
-            os.environ.get("VF_CUSTOMER_ID_3"),
+            os.environ.get("VF_CUSTOMER_ID_4"),
         ]
     )
 
 
 @pytest.mark.asyncio
-async def test_list_customers_by_metadata_referrer_and_campaign(fake_agent: FakeAgent):
-    job_goal = "Find all customers whose metadata 'referrerUserId' equals 'test-1' and metadata 'referralCampaignName' equals 'TestReferralCampaign'. Return their ids."
+async def test_list_customers_by_multiple_metadata_filters(fake_agent: FakeAgent):
+    job_goal = "Find all customers whose metadata 'foo' equals 'bar' and metadata 'club' equals 'Katowice'. Return their ids."
     jobContext = await fake_agent.startJob(job_goal)
 
     assert_tool_call(
@@ -62,8 +62,8 @@ async def test_list_customers_by_metadata_referrer_and_campaign(fake_agent: Fake
         expectedToolName = "list_customers",
         expectedToolArgs = {
             "filters": {
-                "metadata.referrerUserId": { "conditions": { "$is": "test-1" } },
-                "metadata.referralCampaignName": { "conditions": { "$is": "TestReferralCampaign" } }
+                "metadata.foo": { "conditions": { "$is": "bar" } },
+                "metadata.club": { "conditions": { "$is": "Katowice" } }
             }
         }
     )
@@ -72,10 +72,11 @@ async def test_list_customers_by_metadata_referrer_and_campaign(fake_agent: Fake
     assert_message(
         jobContext,
         expectedPatterns = [
-            os.environ.get("VF_CUSTOMER_ID_5"),
-            os.environ.get("VF_CUSTOMER_ID_6"),
+            os.environ.get("VF_CUSTOMER_ID_1"),
         ],
         disallowedPatterns = [
-            os.environ.get("VF_CUSTOMER_ID_1"),
+            os.environ.get("VF_CUSTOMER_ID_2"),
+            os.environ.get("VF_CUSTOMER_ID_3"),
+            os.environ.get("VF_CUSTOMER_ID_4"),
         ]
     )
