@@ -104,6 +104,7 @@ This server provides read-only MCP tools for retrieving information from Voucher
 - `get_campaign`: Retrieve complete campaign details by ID with validation rules
 - `list_campaigns`: Get all campaigns for name-based lookup
 - `get_campaign_summary`: Retrieve campaign analytics and statistics  
+- `list_vouchers`: List vouchers with optional filters (by holder, campaign, type, referral status, etc.)
 - `get_voucher`: Get specific voucher details by code or ID
 - `list_voucher_redemptions`: List all redemptions for a voucher code (find referees who redeemed a referral code)
 - `get_promotion_tier`: Get specific promotion tier details
@@ -717,6 +718,101 @@ async def get_campaign_summary(
         raise map_voucherify_error_to_tool_error(e, "retrieving campaign summary for", ctx, campaign_id)
 
 # ----------------------- Vouchers ------------------------------
+
+
+@mcp.tool(
+    name="list_vouchers",
+    tags={"vouchers", "search", "read"}
+)
+async def list_vouchers(
+    ctx: Context,
+    filters: Annotated[
+        Optional[Dict],
+        {"description": "Voucher filters using field paths and condition operators. Must be valid JSON object with nested structure."}
+    ] = None,
+    page: Annotated[
+        Optional[int],
+        {"description": "Page number for pagination (omit for page 1, provide 2+ for subsequent pages)"}
+    ] = None,
+) -> str:
+    """
+    List vouchers with optional filtering and pagination.
+
+    Returns paginated voucher list with flexible filtering capabilities for
+    voucher discovery, customer wallet inspection, and campaign analysis.
+
+    Parameters:
+    - filters: Optional filter criteria using field paths and operators
+    - page: Optional page number (default: 1, provide only for page 2+)
+
+    Filter Structure:
+    {
+        "field_path": {
+            "conditions": {
+                "$operator": "value"
+            }
+        }
+    }
+
+    Supported Fields:
+    - code: Voucher code (string)
+    - holder_id: Customer ID who holds the voucher (string, cust_ prefix)
+    - campaign_id: Campaign the voucher belongs to (string, camp_ prefix)
+    - is_referral_code: Whether the voucher is a referral code (boolean)
+    - type: Voucher type (string: DISCOUNT_VOUCHER, GIFT_VOUCHER, LOYALTY_CARD)
+    - active: Whether the voucher is active (boolean)
+    - created_at: Creation date (ISO 8601)
+    - updated_at: Last update date (ISO 8601)
+    - metadata.<field>: Custom metadata fields (various types)
+
+    Operators by Field Type:
+    String fields (code, holder_id, campaign_id, type):
+    - $is, $is_not: Exact match
+    - $contains, $starts_with: Partial match
+    - $in: Match any from array
+
+    Boolean fields (is_referral_code, active):
+    - $is: Exact match (true or false)
+
+    Date fields (created_at, updated_at):
+    - $after, $before: Date comparison (ISO 8601 format)
+
+    Common Use Cases:
+    - Find all vouchers held by a customer:
+      list_vouchers(filters={"holder_id": {"conditions": {"$is": "cust_abc123"}}})
+    - Find referral codes for a customer:
+      list_vouchers(filters={
+          "holder_id": {"conditions": {"$is": "cust_abc123"}},
+          "is_referral_code": {"conditions": {"$is": true}}
+      })
+    - Find vouchers in a campaign:
+      list_vouchers(filters={"campaign_id": {"conditions": {"$is": "camp_abc123"}}})
+
+    Returns:
+    JSON object containing:
+    - vouchers: Array of voucher objects with full details
+    - total: Total number of matching vouchers
+    - has_more: Boolean indicating if more pages available
+    - Each voucher includes: id, code, type, discount, campaign, holder_id, metadata, timestamps
+
+    Pagination:
+    - 100 vouchers per page
+    - Results sorted by created_at descending (newest first)
+
+    Raises:
+    - ToolError: If filter structure invalid or unsupported operators used
+    """
+    try:
+        params = dict_to_querystring({
+            "page": page or 1,
+            "limit": 100,
+            "order": "-created_at",
+            "filters": filters or None,
+        })
+        response = await async_make_voucherify_request("GET", "/v1/vouchers", params=params, ctx=ctx)
+        return json.dumps(response.json(), indent=2)
+    except Exception as e:
+        raise map_voucherify_error_to_tool_error(e, "listing vouchers", ctx)
 
 
 @mcp.tool(
