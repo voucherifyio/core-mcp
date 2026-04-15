@@ -553,6 +553,23 @@ def main() -> None:
         "VF_VOUCHER_FREE_1_CODE": code_free,
     })
 
+    # 10.1) Create and publish a discount voucher to customer 2
+    print("Creating and publishing a discount voucher to customer 2 ...")
+    code_cust2 = random_code("CUST2")
+    v_cust2 = create_discount_voucher(code_cust2)
+    cust2_id = created_customers["test2@voucherify.io"].id
+    publications_api.create_publication(
+        publications_create_request_body = voucherify.PublicationsCreateRequestBody(
+            customer = voucherify.Customer(id=cust2_id),
+            voucher = code_cust2,
+        )
+    )
+    append_env(env_path, {
+        "VF_VOUCHER_CUST_2_1": code_cust2,
+        "VF_VOUCHER_CUST_2_1_ID": getattr(v_cust2, "id", "") or "",
+        "VF_VOUCHER_CUST_2_1_CODE": code_cust2,
+    })
+
     # 11) Create standalone discount voucher with burger_deluxe_rule validation and publish to customer 1
     print("Creating standalone discount voucher with burger_deluxe_rule validation and publishing to customer 1 ...")
     burger_deluxe_code = random_code("DELUXE")
